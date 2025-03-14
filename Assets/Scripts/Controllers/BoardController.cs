@@ -65,7 +65,7 @@ public class BoardController : MonoBehaviour
             case GameManager.eStateGame.PAUSE:
                 IsBusy = true;
                 break;
-            case GameManager.eStateGame.GAME_OVER:
+            case GameManager.eStateGame.GAME_OVER|GameManager.eStateGame.GAME_WIN:
                 m_gameOver = true;
                 StopHints();
                 break;
@@ -134,25 +134,37 @@ public class BoardController : MonoBehaviour
         // }
 
         // modified code
-        if(Input.GetMouseButtonDown(0))
+
+
+        if (m_gameManager.isAuto)
+        {
+            m_timeAfterFill -= Time.deltaTime;
+            if (m_timeAfterFill < 0)
+            {
+                m_timeAfterFill += 0.5f;
+                AutoFill();
+            }
+        }
+        else if (Input.GetMouseButtonDown(0))
         {
             var hit = Physics2D.Raycast(m_cam.ScreenToWorldPoint(Input.mousePosition), Vector2.zero);
             if (hit.collider != null)
             {
                 Cell currentCell = hit.collider.GetComponent<Cell>();
 
-                if(currentCell == null || currentCell.IsEmpty) return;
+                if (currentCell == null || currentCell.IsEmpty) return;
                 Debug.Log("Cell: " + currentCell.name);
 
-                if(m_board.IsBottomCell(currentCell))
+                if (m_board.IsBottomCell(currentCell))
                 {
-                    if(m_gameManager.Mode == GameManager.eLevelMode.MOVES)
+                    if (m_gameManager.Mode == GameManager.eLevelMode.MOVES)
                     {
                         return;
                     }
-                    else{
-                        m_board.Count ++;
-                        m_board.MoveBackToOrigin(currentCell,() =>
+                    else
+                    {
+                        m_board.Count++;
+                        m_board.MoveBackToOrigin(currentCell, () =>
                         {
                             IsBusy = false;
                         });
@@ -165,15 +177,15 @@ public class BoardController : MonoBehaviour
                     {
                         OnMoveEvent?.Invoke();
                         IsBusy = true;
-                        m_board.Count --;
+                        m_board.Count--;
                         SetSortingLayer(currentCell, bottomCell);
                         m_board.MoveToBottomCell(currentCell, bottomCell, () =>
                         {
                             // Check if bottom cell can collapse
                             m_board.CollapseThreeSimilarCellInBottomCells();
 
-                            if(m_gameManager.Mode == GameManager.eLevelMode.MOVES)
-                            {                            
+                            if (m_gameManager.Mode == GameManager.eLevelMode.MOVES)
+                            {
                                 bool isFull = m_board.IsBottomCellFull();
 
                                 if (isFull)
@@ -184,7 +196,7 @@ public class BoardController : MonoBehaviour
                             }
                             IsBusy = false;
 
-                            if(m_board.Count == 0)
+                            if (m_board.Count == 0)
                             {
                                 //win
                                 m_gameManager.SetState(GameManager.eStateGame.GAME_WIN);
@@ -192,18 +204,6 @@ public class BoardController : MonoBehaviour
                         });
                     }
                 }
-
-            }
-        }
-
-
-        if(m_gameManager.isAuto)
-        {         
-            m_timeAfterFill -= Time.deltaTime;
-            if (m_timeAfterFill < 0)
-            {
-                m_timeAfterFill += 0.5f;
-                AutoFill();
             }
         }
     }
@@ -212,51 +212,51 @@ public class BoardController : MonoBehaviour
     {
         Cell lastBottomCell = m_board.GetLastFilledCell();
         Cell selectedCell = null;
-        if(lastBottomCell == null)
+        if (lastBottomCell == null)
         {
             selectedCell = m_board.GetFirstInBoardThatNotEmpty();
         }
         else
         {
-            if(m_gameManager.isAutoWin)
-            selectedCell = m_board.FindSimilarCellInBoard(lastBottomCell);
+            if (m_gameManager.isAutoWin)
+                selectedCell = m_board.FindSimilarCellInBoard(lastBottomCell);
             else
-            selectedCell = m_board.FindDifferentCellInBoard(lastBottomCell);
+                selectedCell = m_board.FindDifferentCellInBoard(lastBottomCell);
         }
 
-        if(!m_gameManager.isAutoWin && m_gameManager.Mode == GameManager.eLevelMode.TIMER && m_board.IsBottomCellFull())return;
+        if (!m_gameManager.isAutoWin && m_gameManager.Mode == GameManager.eLevelMode.TIMER && m_board.IsBottomCellFull()) return;
 
         Cell bottomCell = m_board.GetFirstEmptyCell();
-                if (bottomCell != null)
+        if (bottomCell != null)
+        {
+            OnMoveEvent?.Invoke();
+            IsBusy = true;
+            m_board.Count--;
+            SetSortingLayer(selectedCell, bottomCell);
+            m_board.MoveToBottomCell(selectedCell, bottomCell, () =>
+            {
+                // Check if bottom cell can collapse
+                m_board.CollapseThreeSimilarCellInBottomCells();
+
+                if (m_gameManager.Mode == GameManager.eLevelMode.MOVES)
                 {
-                    OnMoveEvent?.Invoke();
-                    IsBusy = true;
-                    m_board.Count --;
-                    SetSortingLayer(selectedCell, bottomCell);
-                    m_board.MoveToBottomCell(selectedCell, bottomCell, () =>
+                    bool isFull = m_board.IsBottomCellFull();
+
+                    if (isFull)
                     {
-                        // Check if bottom cell can collapse
-                        m_board.CollapseThreeSimilarCellInBottomCells();
-
-                        if(m_gameManager.Mode == GameManager.eLevelMode.MOVES)
-                            {                            
-                                bool isFull = m_board.IsBottomCellFull();
-
-                                if (isFull)
-                                {
-                                    Debug.LogWarning("Game Over");
-                                    m_gameManager.GameOver();
-                                }
-                            }
-                        IsBusy = false;
-
-                        if(m_board.Count == 0)
-                        {
-                            //win
-                            m_gameManager.SetState(GameManager.eStateGame.GAME_WIN);
-                        }
-                    });
+                        Debug.LogWarning("Game Over");
+                        m_gameManager.GameOver();
+                    }
                 }
+                IsBusy = false;
+
+                if (m_board.Count == 0)
+                {
+                    //win
+                    m_gameManager.SetState(GameManager.eStateGame.GAME_WIN);
+                }
+            });
+        }
 
     }
 
@@ -353,7 +353,7 @@ public class BoardController : MonoBehaviour
             matches[i].ExplodeItem();
         }
 
-        if(matches.Count > m_gameSettings.MatchesMin)
+        if (matches.Count > m_gameSettings.MatchesMin)
         {
             m_board.ConvertNormalToBonus(matches, cellEnd);
         }
